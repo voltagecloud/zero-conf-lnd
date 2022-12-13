@@ -1,6 +1,9 @@
-use crate::config::Config;
+use lnd::start_channel_acceptor;
+
+use crate::{config::Config, lnd::create_client};
 
 mod config;
+mod lnd;
 
 #[tokio::main]
 async fn main() {
@@ -9,5 +12,8 @@ async fn main() {
         std::env::set_var("RUST_LOG", "lsp_server=debug,tower_http=debug")
     }
     tracing_subscriber::fmt::init();
-    let _ = Config::new();
+
+    let cfg = Config::new();
+    let lnd_client = create_client(cfg.lnd).await;
+    start_channel_acceptor(lnd_client, cfg.channel_acceptance).await
 }
