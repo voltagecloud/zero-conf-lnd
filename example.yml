@@ -1,0 +1,8 @@
+lnd:
+  macaroon_location: "~/.lnd/data/chain/bitcoin/mainnet/admin.macaroon"
+  cert_location: "~/.lnd/tls.cert"
+  host: "127.0.0.1"
+  port: 9735
+channel_acceptance: 
+  - pubkey: ""
+    confs: 0
