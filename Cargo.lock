@@ -1182,10 +1182,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic_openssl_lnd"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e12d23e1ec801d3713db19b64e1f46e4c7df5f4eb0f75da0208f8a4cd8fa34a"
+name = "tonic_lnd"
+version = "0.5.0"
+source = "git+https://github.com/okjodom/tonic_lnd?branch=openssl-support#db1fbba8126ab3e9ca26f46e31d8c9cd1c8aae3d"
 dependencies = [
  "hex",
  "hyper",
@@ -1481,7 +1480,7 @@ dependencies = [
  "serde_yaml",
  "tokio",
  "tokio-stream",
- "tonic_openssl_lnd",
+ "tonic_lnd",
  "tracing",
  "tracing-subscriber",
 ]

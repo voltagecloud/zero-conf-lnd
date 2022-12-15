@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic_openssl_lnd = "0.2.0"
+# need to use this until tonic_lnd issue is fixed: https://github.com/Kixunil/tonic_lnd/issues/17
+tonic_lnd = { git = "https://github.com/okjodom/tonic_lnd", branch = "openssl-support" } 
 tokio = "^1"
 tokio-stream = "0.1.11"
 serde = { version = "1.0", features = ["derive"] }
