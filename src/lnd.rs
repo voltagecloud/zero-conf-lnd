@@ -1,6 +1,8 @@
 use crate::config::ChannelAcceptanceParams;
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
+use tokio::time::sleep;
 use tonic_lnd::lnrpc::ChannelAcceptRequest;
 
 use crate::config::LndConfig;
@@ -25,7 +27,7 @@ pub(crate) async fn create_client(cfg: LndConfig) -> LightningClient {
 }
 
 pub(crate) async fn start_channel_acceptor(
-    mut lnd_client: LightningClient,
+    lnd_client: LightningClient,
     whitelisted_channels: Vec<ChannelAcceptanceParams>,
 ) {
     tracing::info!("starting channel acceptor");
@@ -39,17 +41,26 @@ pub(crate) async fn start_channel_acceptor(
             .or_insert(c.confs);
     });
 
+    loop {
+        start_listening(lnd_client.clone(), whitelist.clone()).await;
+        tracing::debug!("restarting channel acceptor in 5s...");
+        sleep(Duration::from_secs(5)).await;
+    }
+}
+
+async fn start_listening(mut lnd_client: LightningClient, whitelist: HashMap<String, i8>) {
     let (tx, rx) = mpsc::channel::<ChannelAcceptResponse>(1024);
     let receive_stream = ReceiverStream::new(rx);
-
-    let mut channel_acceptor = lnd_client
-        .channel_acceptor(receive_stream)
-        .await
-        .expect("could not start channel acceptor")
+    let channel_acceptor_conn = lnd_client.channel_acceptor(receive_stream).await;
+    if channel_acceptor_conn.is_err() {
+        tracing::error!("channel acceptor failed before receiving first message..");
+        return;
+    }
+    let mut channel_acceptor = channel_acceptor_conn
+        .expect("channel acceptor should not have an error")
         .into_inner();
 
     tracing::info!("channel acceptor started");
-
     while let Some(channel) = channel_acceptor
         .message()
         .await
