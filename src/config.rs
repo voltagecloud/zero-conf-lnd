@@ -26,7 +26,7 @@ pub(crate) struct ChannelAcceptanceParams {
     pub pubkey: String,
 
     #[serde(default = "default_confs")]
-    pub confs: u8,
+    pub confs: i8,
 }
 
 fn default_lnd_macaroon_location() -> String {
@@ -49,7 +49,7 @@ fn default_empty_string() -> String {
     String::from("")
 }
 
-fn default_confs() -> u8 {
+fn default_confs() -> i8 {
     0
 }
 

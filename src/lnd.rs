@@ -31,7 +31,7 @@ pub(crate) async fn start_channel_acceptor(
     tracing::info!("starting channel acceptor");
 
     // convert vec to hashmap for easy access
-    let mut whitelist: HashMap<String, u8> = HashMap::new();
+    let mut whitelist: HashMap<String, i8> = HashMap::new();
     whitelisted_channels.into_iter().for_each(|c| {
         whitelist
             .entry(c.pubkey)
@@ -55,31 +55,36 @@ pub(crate) async fn start_channel_acceptor(
         .await
         .expect("Failed to receive HTLCs")
     {
-        tracing::debug!("received request to accept channel...");
-
-        // check zero conf status
-        if !channel.wants_zero_conf {
-            // TODO check the conf amount if less than normal
-            tracing::debug!("accepting normal channel...");
-            accept(tx.clone(), channel, true, 0).await;
-            tracing::info!("normal channel accepted");
-            continue;
-        }
-
         let node_pubkey = PublicKey::from_slice(&channel.node_pubkey)
             .expect("node_pubkey should be a PublicKey")
             .to_string();
 
-        if let Some(whitelisted_channel_confs) = whitelist.get(&node_pubkey) {
-            // parse the confirmation minimum and return the channel acceptor response
-            tracing::debug!("accepting zero conf channel...");
-            accept(tx.clone(), channel, true, *whitelisted_channel_confs as u32).await;
-            tracing::info!("zero conf channel accepted");
-        } else {
-            // not in our whitelist, send failure response
-            tracing::debug!("denying zero conf channel...");
-            deny(tx.clone(), channel).await;
-            tracing::info!("zero conf channel denied");
+        tracing::debug!("received request to accept channel from {node_pubkey}...");
+
+        let confs_required = match whitelist.get(&node_pubkey) {
+            Some(c) => *c,
+            None => 6, // TODO support testnet/regtest only requiring 3
+        };
+
+        match confs_required {
+            i8::MIN..=-1 => {
+                // anything negative is a deny
+                deny(tx.clone(), channel).await;
+            }
+            0 => {
+                // node was in our whitelist with 0 confs required, accept...
+                tracing::debug!("accepting zero conf channel...");
+                accept(tx.clone(), channel, true, 0).await;
+                tracing::info!("zero conf channel accepted from {node_pubkey}");
+            }
+            _ => {
+                // accept all other channels, just don't indicate it's zero conf
+                // these could either be whitelisted with a specific conf or
+                // not whitelisted at all
+                tracing::debug!("accept channel with confs: {confs_required}");
+                accept(tx.clone(), channel, false, confs_required as u32).await;
+                tracing::info!("accepted non-zero-conf channels from {node_pubkey}");
+            }
         }
     }
 }
@@ -121,7 +126,7 @@ async fn deny(tx: Sender<ChannelAcceptResponse>, channel: ChannelAcceptRequest) 
         max_htlc_count: 0,
         min_htlc_in: 0,
         min_accept_depth: 0,
-        zero_conf: true,
+        zero_conf: false,
     })
     .await
     .unwrap()
