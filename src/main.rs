@@ -9,7 +9,7 @@ mod lnd;
 async fn main() {
     // Set the RUST_LOG, if it hasn't been explicitly defined
     if std::env::var_os("RUST_LOG").is_none() {
-        std::env::set_var("RUST_LOG", "lsp_server=debug,tower_http=debug")
+        std::env::set_var("RUST_LOG", "zero_conf_lnd=debug")
     }
     tracing_subscriber::fmt::init();
 
