@@ -40,6 +40,7 @@ cargo run .local.config.yml
 ### Dependencies
 
 - cmake
+- libssl-dev
 
 ## Zeroconf Probing
 
