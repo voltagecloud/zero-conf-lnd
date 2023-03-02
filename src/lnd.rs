@@ -9,12 +9,8 @@ use crate::config::LndConfig;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic_lnd::lnrpc::{
-    ChannelAcceptResponse, SendCustomMessageRequest, SubscribeCustomMessagesRequest,
-};
+use tonic_lnd::lnrpc::ChannelAcceptResponse;
 use tonic_lnd::LightningClient;
-
-use serde_json::{json, Value};
 
 pub(crate) async fn create_client(cfg: LndConfig) -> LightningClient {
     tracing::info!("starting connection to lnd");
@@ -45,106 +41,10 @@ pub(crate) async fn start_channel_acceptor(
             .or_insert(c.confs);
     });
 
-    let _ = tokio::join!(
-        async {
-            loop {
-                start_listening(lnd_client.clone(), whitelist.clone()).await;
-                tracing::debug!("restarting channel acceptor in 5s...");
-                sleep(Duration::from_secs(5)).await;
-            }
-        },
-        async {
-            loop {
-                start_listening_custommsg(lnd_client.clone(), whitelist.clone()).await;
-                tracing::debug!("restarting custommsg in 5s...");
-                sleep(Duration::from_secs(5)).await;
-            }
-        },
-    );
-}
-
-async fn start_listening_custommsg(
-    mut lnd_client: LightningClient,
-    whitelist: HashMap<String, i8>,
-) {
-    let request: SubscribeCustomMessagesRequest = Default::default();
-
-    let mut custommsg_stream = {
-        match lnd_client.subscribe_custom_messages(request).await {
-            Ok(response) => response.into_inner(),
-            Err(..) => {
-                // TODO: bubble the error
-                tracing::error!("custommsg failed before receiving first message..");
-                return;
-            }
-        }
-    };
-
-    tracing::info!("custommsg started");
-    while let Some(custommsg) = custommsg_stream
-        .message()
-        .await
-        .expect("Failed to receive custommsg")
-    {
-        // 'type' is a keyword in rust, so we need to use r#type
-        if custommsg.r#type != 55443 {
-            tracing::error!("custommsg: Unrecognized message type in incoming request");
-            continue;
-        }
-
-        let msg_contents: Value = match serde_json::from_slice(&custommsg.data) {
-            Ok(v) => v,
-            Err(..) => {
-                tracing::error!("custommsg: Non-JSON decodable data in incoming request");
-                continue;
-            }
-        };
-
-        if msg_contents.get("method") != Some(&json!("getzeroconfinfo")) {
-            tracing::error!("custommsg: Unrecognized method in incoming request");
-            continue;
-        }
-
-        let msg_id = match msg_contents.get("id") {
-            Some(id) => id,
-            None => {
-                tracing::error!("custommsg: No id field in incoming request");
-                continue;
-            }
-        };
-
-        let node_pubkey = PublicKey::from_slice(&custommsg.peer)
-            .expect("node_pubkey should be a PublicKey")
-            .to_string();
-
-        let reply_contents = json!({
-               "id": msg_id,
-               "result": {
-                   "allows_your_zeroconf": whitelist.get(&node_pubkey) == Some(&0),
-               }
-        });
-
-        tracing::debug!("custommsg: Replying affirmatively to {}", msg_id);
-
-        let reply_data: Vec<u8> = match serde_json::to_vec(&reply_contents) {
-            Ok(vec) => vec,
-            Err(..) => {
-                tracing::error!("custommsg: Could serialize affirmative reply");
-                continue;
-            }
-        };
-
-        // 'type' is a keyword in rust, so we need to use r#type
-        let reply = SendCustomMessageRequest {
-            peer: custommsg.peer,
-            r#type: 55445,
-            data: reply_data,
-        };
-
-        if lnd_client.send_custom_message(reply).await.is_err() {
-            tracing::error!("custommsg: Could not send affirmative reply");
-            continue;
-        }
+    loop {
+        start_listening(lnd_client.clone(), whitelist.clone()).await;
+        tracing::debug!("restarting channel acceptor in 5s...");
+        sleep(Duration::from_secs(5)).await;
     }
 }
 
